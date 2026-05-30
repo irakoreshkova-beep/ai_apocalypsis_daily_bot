@@ -1,0 +1,33 @@
+name: Telegram AI Digest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
+      timezone: "Asia/Tbilisi"
+
+permissions:
+  contents: read
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Send Telegram digest
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: "gpt-4.1-mini"
+          DIGEST_TIMEZONE: "Asia/Tbilisi"
+          DIGEST_LOOKBACK_HOURS: "30"
+          DIGEST_MAX_ITEMS: "12"
+        run: python ai-news-telegram/daily_digest.py
