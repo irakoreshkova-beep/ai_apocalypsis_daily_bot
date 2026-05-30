@@ -281,10 +281,30 @@ def build_model_input(items: list[NewsItem]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
+def pick_section_emoji(title: str) -> str:
+    normalized = title.lower()
+    if "модел" in normalized or "релиз" in normalized:
+        return "🧠"
+    if "дизайн" in normalized or "креатив" in normalized or "визуал" in normalized:
+        return "🎨"
+    if "разработ" in normalized or "dev" in normalized or "код" in normalized:
+        return "🛠️"
+    if "рын" in normalized or "бизнес" in normalized or "сделк" in normalized:
+        return "💼"
+    if "робот" in normalized or "желез" in normalized or "авто" in normalized:
+        return "🤖"
+    if "медицин" in normalized or "наук" in normalized or "исслед" in normalized:
+        return "🧬"
+    return "✨"
+
+
 def generate_digest(items: list[NewsItem], config: Config) -> str:
     today = datetime.now().strftime("%d.%m.%Y")
     if not items:
-        return f"AI дайджест — {today}\n\nСегодня в отслеживаемых источниках заметных новых обновлений не нашлось."
+        return (
+            f"<b>AI дайджест — {html.escape(today)}</b>\n\n"
+            "Сегодня в отслеживаемых источниках заметных новых обновлений не нашлось."
+        )
 
     schema = {
         "type": "object",
@@ -304,8 +324,9 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
                 },
             },
             "closing": {"type": "string"},
+            "ai_signoff": {"type": "string"},
         },
-        "required": ["headline", "intro", "sections", "closing"],
+        "required": ["headline", "intro", "sections", "closing", "ai_signoff"],
         "additionalProperties": False,
     }
 
@@ -320,7 +341,10 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
                 "Приоритизируй понятные человеку темы: новые модели и релизы, дизайн и креативные инструменты, разработка и dev-tools, бизнес и рынок, роботы и железо, медицина и наука. "
                 "Используй только те секции, для которых реально есть новости. Не делай пустые разделы. "
                 "Сделай 3-5 секций максимум. В каждой секции 1-3 пункта. Каждый пункт 1-2 предложения. "
-                "Пиши живо и по делу, без пафоса и без воды. Не добавляй ссылки, не выдумывай факты."
+                "Названия секций делай короткими, по 2-4 слова. "
+                "Пиши живо и по делу, без пафоса и без воды. Не добавляй ссылки, не выдумывай факты. "
+                "В конце дай одну очень короткую ироничную реплику от лица ИИ про людей, технологии, работу, апокалипсис, дедлайны или будущее. "
+                "Она должна быть остроумной, сухой и короткой, максимум одно предложение."
             ),
             "input": build_model_input(items),
             "text": {
@@ -348,23 +372,27 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
     )
     parsed = json.loads(extract_response_text(response_payload))
 
-    lines = [parsed["headline"].strip()]
+    lines = [f"<b>{html.escape(parsed['headline'].strip())}</b>"]
     intro = re.sub(r"\s+", " ", parsed["intro"]).strip()
     if intro:
-        lines.extend(["", intro])
+        lines.extend(["", html.escape(intro)])
     for section in parsed["sections"][:5]:
         title = re.sub(r"\s+", " ", section["title"]).strip()
         items_in_section = section.get("items", [])[:3]
         if not title or not items_in_section:
             continue
-        lines.extend(["", f"{title}"])
+        emoji = pick_section_emoji(title)
+        lines.extend(["", f"<b>{emoji} {html.escape(title)}</b>"])
         for bullet in items_in_section:
             text = re.sub(r"\s+", " ", bullet).strip()
             if text:
-                lines.append(f"• {text}")
+                lines.append(f"▪️ {html.escape(text)}")
     closing = re.sub(r"\s+", " ", parsed["closing"]).strip()
     if closing:
-        lines.extend(["", closing])
+        lines.extend(["", html.escape(closing)])
+    ai_signoff = re.sub(r"\s+", " ", parsed["ai_signoff"]).strip()
+    if ai_signoff:
+        lines.extend(["", f"<b>P.S.</b> {html.escape(ai_signoff)}"])
 
     message = "\n".join(lines).strip()
     return message[:3900]
@@ -377,6 +405,7 @@ def send_telegram_message(config: Config, message: str) -> None:
             "chat_id": config.telegram_chat_id,
             "text": message,
             "disable_web_page_preview": True,
+            "parse_mode": "HTML",
         },
         ensure_ascii=False,
     ).encode("utf-8")
