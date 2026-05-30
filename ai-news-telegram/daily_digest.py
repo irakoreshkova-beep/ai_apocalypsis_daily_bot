@@ -290,10 +290,22 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
         "type": "object",
         "properties": {
             "headline": {"type": "string"},
-            "bullets": {"type": "array", "items": {"type": "string"}},
+            "intro": {"type": "string"},
+            "sections": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "items": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["title", "items"],
+                    "additionalProperties": False,
+                },
+            },
             "closing": {"type": "string"},
         },
-        "required": ["headline", "bullets", "closing"],
+        "required": ["headline", "intro", "sections", "closing"],
         "additionalProperties": False,
     }
 
@@ -301,12 +313,14 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
         {
             "model": config.openai_model,
             "instructions": (
-                "Ты редактор ежедневного AI-дайджеста на русском языке. "
+                "Ты редактор ежедневного AI-дайджеста на русском языке для арт-директора, который следит за ИИ в работе и в индустрии в целом. "
                 "На входе список новостей из индустрии ИИ. "
-                "Собери из них короткий, живой, информативный пересказ для Telegram. "
-                "Не переводи дословно. Сожми повторы. Выдели главное: релизы моделей, продуктовые апдейты, сделки, исследования, увольнения, рынок, дизайн и dev-tools. "
-                "Пиши просто и по делу, без воды. Не добавляй ссылки, не выдумывай факты. "
-                "Сделай 5-8 пунктов максимум. Каждый пункт 1-2 предложения."
+                "Собери из них короткий, дружелюбный, но содержательный пересказ для Telegram. "
+                "Не переводи дословно. Сожми повторы. Объединяй близкие новости в тематические блоки. "
+                "Приоритизируй понятные человеку темы: новые модели и релизы, дизайн и креативные инструменты, разработка и dev-tools, бизнес и рынок, роботы и железо, медицина и наука. "
+                "Используй только те секции, для которых реально есть новости. Не делай пустые разделы. "
+                "Сделай 3-5 секций максимум. В каждой секции 1-3 пункта. Каждый пункт 1-2 предложения. "
+                "Пиши живо и по делу, без пафоса и без воды. Не добавляй ссылки, не выдумывай факты."
             ),
             "input": build_model_input(items),
             "text": {
@@ -334,11 +348,20 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
     )
     parsed = json.loads(extract_response_text(response_payload))
 
-    lines = [parsed["headline"].strip(), ""]
-    for bullet in parsed["bullets"][:8]:
-        text = re.sub(r"\s+", " ", bullet).strip()
-        if text:
-            lines.append(f"• {text}")
+    lines = [parsed["headline"].strip()]
+    intro = re.sub(r"\s+", " ", parsed["intro"]).strip()
+    if intro:
+        lines.extend(["", intro])
+    for section in parsed["sections"][:5]:
+        title = re.sub(r"\s+", " ", section["title"]).strip()
+        items_in_section = section.get("items", [])[:3]
+        if not title or not items_in_section:
+            continue
+        lines.extend(["", f"{title}"])
+        for bullet in items_in_section:
+            text = re.sub(r"\s+", " ", bullet).strip()
+            if text:
+                lines.append(f"• {text}")
     closing = re.sub(r"\s+", " ", parsed["closing"]).strip()
     if closing:
         lines.extend(["", closing])
