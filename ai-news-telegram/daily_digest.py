@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 FEEDS = [
     {"name": "OpenAI", "kind": "rss", "url": "https://openai.com/news/rss.xml"},
@@ -258,13 +259,33 @@ def load_state() -> dict:
         return {"sent_fingerprints": []}
 
 
-def save_state(config: Config, items: list[NewsItem]) -> None:
-    existing = load_state().get("sent_fingerprints", [])
+def local_today(config: Config) -> str:
+    try:
+        tz = ZoneInfo(config.timezone_name)
+    except Exception:  # noqa: BLE001
+        tz = timezone.utc
+    return datetime.now(tz).date().isoformat()
+
+
+def is_scheduled_run() -> bool:
+    return os.getenv("GITHUB_EVENT_NAME") == "schedule"
+
+
+def scheduled_digest_already_sent(config: Config) -> bool:
+    return load_state().get("last_scheduled_digest_date") == local_today(config)
+
+
+def save_state(config: Config, items: list[NewsItem], *, mark_scheduled_sent: bool = False) -> None:
+    state = load_state()
+    existing = state.get("sent_fingerprints", [])
     merged = existing + [item.fingerprint for item in items]
     payload = {
+        **state,
         "sent_fingerprints": merged[-config.state_limit :],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    if mark_scheduled_sent:
+        payload["last_scheduled_digest_date"] = local_today(config)
     STATE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -454,11 +475,16 @@ def send_telegram_message(config: Config, message: str) -> None:
 
 def main() -> None:
     config = load_config()
+    scheduled_run = is_scheduled_run()
+    if scheduled_run and scheduled_digest_already_sent(config):
+        print("[info] Scheduled digest already sent today. Skipping.", file=sys.stderr)
+        return
+
     items = collect_items(config)
     message = generate_digest(items, config)
     send_telegram_message(config, message)
-    if items:
-        save_state(config, items)
+    if items or scheduled_run:
+        save_state(config, items, mark_scheduled_sent=scheduled_run)
     print(f"[info] Sent Telegram digest with {len(items)} source item(s).", file=sys.stderr)
 
 
