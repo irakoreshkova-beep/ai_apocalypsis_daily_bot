@@ -2,6 +2,11 @@ name: Telegram AI Digest Manual
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to send: brief or rubric"
+        required: false
+        default: "brief"
 
 permissions:
   contents: write
@@ -24,6 +29,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: "gpt-4.1-mini"
+          DIGEST_TRIGGER: "cronjob"
+          DIGEST_MODE: ${{ github.event.inputs.mode || 'brief' }}
           DIGEST_TIMEZONE: "Asia/Tbilisi"
           DIGEST_LOOKBACK_HOURS: "30"
           DIGEST_MAX_ITEMS: "8"
