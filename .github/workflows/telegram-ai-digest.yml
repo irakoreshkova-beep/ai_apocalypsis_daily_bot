@@ -3,7 +3,7 @@ name: Telegram AI Digest
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 7 * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
 
       - name: Commit digest state
         run: |
-          if git diff --quiet -- ai-news-telegram/digest_state.json; then
+          if [ -z "$(git status --short -- ai-news-telegram/digest_state.json)" ]; then
             echo "No digest state changes to commit."
             exit 0
           fi
