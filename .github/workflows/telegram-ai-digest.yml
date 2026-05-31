@@ -1,9 +1,7 @@
-name: Telegram AI Digest
+name: Telegram AI Digest Manual
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
