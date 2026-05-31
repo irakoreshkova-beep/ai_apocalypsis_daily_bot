@@ -1,0 +1,17 @@
+name: Schedule Smoke Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm schedule trigger works
+        run: |
+          echo "Schedule smoke test ran at $(date -u)."
