@@ -3,8 +3,7 @@ name: Telegram AI Digest
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 11 * * *"
-      timezone: "Asia/Tbilisi"
+    - cron: "30 7 * * *"
 
 permissions:
   contents: write
