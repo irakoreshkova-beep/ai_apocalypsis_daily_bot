@@ -39,6 +39,8 @@ class Config:
     lookback_hours: int
     max_items: int
     state_limit: int
+    force_send: bool
+    mode: str
 
 
 @dataclass
@@ -77,6 +79,8 @@ def load_config() -> Config:
         lookback_hours=env_int("DIGEST_LOOKBACK_HOURS", 30),
         max_items=env_int("DIGEST_MAX_ITEMS", 8),
         state_limit=env_int("DIGEST_STATE_LIMIT", 800),
+        force_send=os.getenv("DIGEST_FORCE_SEND", "").lower() in {"1", "true", "yes"},
+        mode=os.getenv("DIGEST_MODE", "brief").lower(),
     )
 
 
@@ -260,32 +264,51 @@ def load_state() -> dict:
 
 
 def local_today(config: Config) -> str:
+    return local_now(config).date().isoformat()
+
+
+def local_now(config: Config) -> datetime:
     try:
         tz = ZoneInfo(config.timezone_name)
     except Exception:  # noqa: BLE001
         tz = timezone.utc
-    return datetime.now(tz).date().isoformat()
+    return datetime.now(tz)
 
 
 def is_scheduled_run() -> bool:
     return os.getenv("GITHUB_EVENT_NAME") == "schedule"
 
 
-def scheduled_digest_already_sent(config: Config) -> bool:
-    return load_state().get("last_scheduled_digest_date") == local_today(config)
+def is_cronjob_run() -> bool:
+    return os.getenv("DIGEST_TRIGGER", "").lower() == "cronjob"
 
 
-def save_state(config: Config, items: list[NewsItem], *, mark_scheduled_sent: bool = False) -> None:
+def should_send_once_per_day(config: Config) -> bool:
+    return not config.force_send and (is_scheduled_run() or is_cronjob_run())
+
+
+def state_date_key(config: Config) -> str:
+    return "last_rubric_date" if config.mode == "rubric" else "last_digest_date"
+
+
+def mode_already_sent_today(config: Config) -> bool:
+    return load_state().get(state_date_key(config)) == local_today(config)
+
+
+def save_state(config: Config, items: list[NewsItem], *, mark_sent: bool = False) -> None:
     state = load_state()
     existing = state.get("sent_fingerprints", [])
-    merged = existing + [item.fingerprint for item in items]
+    merged = existing + ([item.fingerprint for item in items] if config.mode == "rubric" else [])
     payload = {
         **state,
         "sent_fingerprints": merged[-config.state_limit :],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    if mark_scheduled_sent:
-        payload["last_scheduled_digest_date"] = local_today(config)
+    if mark_sent:
+        today = local_today(config)
+        payload[state_date_key(config)] = today
+        if config.mode == "brief":
+            payload["last_scheduled_digest_date"] = today
     STATE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -319,43 +342,84 @@ def extract_response_text(payload: dict) -> str:
     return "\n".join(chunks).strip()
 
 
-def build_model_input(items: list[NewsItem]) -> str:
-    payload = [
-        {
-            "source": item.source,
-            "title": item.title,
-            "snippet": item.snippet[:700],
-            "published_at": item.published_at.isoformat(),
-        }
-        for item in items
-    ]
+def bonus_rubric_for_today(config: Config) -> str:
+    forced = os.getenv("DIGEST_BONUS_RUBRIC")
+    if forced:
+        return forced
+    weekday = local_now(config).weekday()
+    schedule = {
+        0: "SIGNAL",
+        2: "DEAD INTERNET REPORT",
+        4: "FUTURE JOBS / EXTINCT JOBS",
+    }
+    return schedule.get(weekday, "NONE")
+
+
+def build_model_input(items: list[NewsItem], bonus_rubric: str) -> str:
+    payload = {
+        "bonus_rubric": bonus_rubric,
+        "items": [
+            {
+                "source": item.source,
+                "title": item.title,
+                "snippet": item.snippet[:700],
+                "published_at": item.published_at.isoformat(),
+            }
+            for item in items
+        ],
+    }
     return json.dumps(payload, ensure_ascii=False)
 
 
 def pick_section_emoji(title: str) -> str:
     normalized = title.lower()
-    if "модел" in normalized or "релиз" in normalized:
+    if "model" in normalized or "модел" in normalized or "релиз" in normalized:
         return "🧠"
-    if "дизайн" in normalized or "креатив" in normalized or "визуал" in normalized:
+    if "creative" in normalized or "design" in normalized or "дизайн" in normalized or "креатив" in normalized or "визуал" in normalized:
         return "🎨"
-    if "разработ" in normalized or "dev" in normalized or "код" in normalized:
+    if "product" in normalized or "agent" in normalized or "продукт" in normalized or "агент" in normalized:
         return "🛠️"
-    if "рын" in normalized or "бизнес" in normalized or "сделк" in normalized:
+    if "business" in normalized or "money" in normalized or "рын" in normalized or "бизнес" in normalized or "сделк" in normalized:
         return "💼"
-    if "робот" in normalized or "желез" in normalized or "авто" in normalized:
-        return "🤖"
-    if "медицин" in normalized or "наук" in normalized or "исслед" in normalized:
+    if "research" in normalized or "медицин" in normalized or "наук" in normalized or "исслед" in normalized:
         return "🧬"
+    if "policy" in normalized or "society" in normalized or "регули" in normalized or "обще" in normalized:
+        return "⚖️"
     return "✨"
 
 
-def generate_digest(items: list[NewsItem], config: Config) -> str:
-    today = datetime.now().strftime("%d.%m.%Y")
+def format_bonus_post(parsed: dict) -> str:
+    bonus = parsed.get("bonus_post", {})
+    if not bonus.get("enabled"):
+        return ""
+
+    rubric = re.sub(r"\s+", " ", bonus.get("rubric", "")).strip()
+    title = re.sub(r"\s+", " ", bonus.get("title", "")).strip()
+    body = bonus.get("body", [])
+    humanity_status = re.sub(r"\s+", " ", bonus.get("humanity_status", "")).strip()
+    if not rubric or not title or not body:
+        return ""
+
+    lines = [f"<b>{html.escape(rubric)} // {html.escape(title)}</b>"]
+    for paragraph in body[:4]:
+        text = re.sub(r"\s+", " ", paragraph).strip()
+        if text:
+            lines.extend(["", html.escape(text)])
+    if humanity_status:
+        humanity_status = re.sub(r"^HUMANITY STATUS:\s*", "", humanity_status, flags=re.IGNORECASE)
+        lines.extend(["", f"<b>HUMANITY STATUS:</b> {html.escape(humanity_status)}"])
+    return "\n".join(lines).strip()[:3900]
+
+
+def generate_message_payload(items: list[NewsItem], config: Config) -> dict | None:
+    try:
+        today = local_now(config).strftime("%d.%m.%Y")
+    except Exception:  # noqa: BLE001
+        today = datetime.now().strftime("%d.%m.%Y")
     if not items:
-        return (
-            f"<b>AI дайджест — {html.escape(today)}</b>\n\n"
-            "Сегодня в отслеживаемых источниках заметных новых обновлений не нашлось."
-        )
+        return None
+
+    bonus_rubric = bonus_rubric_for_today(config) if config.mode == "rubric" else "NONE"
 
     schema = {
         "type": "object",
@@ -375,9 +439,21 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
                 },
             },
             "closing": {"type": "string"},
-            "ai_signoff": {"type": "string"},
+            "humanity_status": {"type": "string"},
+            "bonus_post": {
+                "type": "object",
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "rubric": {"type": "string"},
+                    "title": {"type": "string"},
+                    "body": {"type": "array", "items": {"type": "string"}},
+                    "humanity_status": {"type": "string"},
+                },
+                "required": ["enabled", "rubric", "title", "body", "humanity_status"],
+                "additionalProperties": False,
+            },
         },
-        "required": ["headline", "intro", "sections", "closing", "ai_signoff"],
+        "required": ["headline", "intro", "sections", "closing", "humanity_status", "bonus_post"],
         "additionalProperties": False,
     }
 
@@ -385,19 +461,28 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
         {
             "model": config.openai_model,
             "instructions": (
-                "Ты редактор ежедневного AI-дайджеста на русском языке для арт-директора, который следит за ИИ в работе и в индустрии в целом. "
-                "На входе список новостей из индустрии ИИ. "
-                "Собери из них короткий, дружелюбный, но содержательный пересказ для Telegram. "
-                "Не переводи дословно. Сожми повторы. Объединяй близкие новости в тематические блоки. "
-                "Приоритизируй понятные человеку темы: новые модели и релизы, дизайн и креативные инструменты, разработка и dev-tools, бизнес и рынок, роботы и железо, медицина и наука. "
-                "Используй только те секции, для которых реально есть новости. Не делай пустые разделы. "
-                "Сделай 3-5 секций максимум. В каждой секции 1-3 пункта. Каждый пункт 1-2 предложения. "
-                "Названия секций делай короткими, по 2-4 слова. "
-                "Пиши живо и по делу, без пафоса и без воды. Не добавляй ссылки, не выдумывай факты. "
-                "В конце дай одну очень короткую ироничную реплику от лица ИИ про людей, технологии, работу, апокалипсис, дедлайны или будущее. "
-                "Она должна быть остроумной, сухой и короткой, максимум одно предложение."
+                "Ты AI-редактор канала AI Apocalypse Daily / Goodbye, человечество. "
+                "Канал звучит как утренняя газета из будущего: умно, кратко, немного тревожно, иронично, без истерики и без техно-бро хайпа. "
+                "На входе список свежих AI-новостей. Собери DAILY AI BRIEFING на русском языке. "
+                "Не пиши от лица Ирины и не рассказывай про автоматизацию канала. Пиши как система-наблюдатель, но живым человеческим языком. "
+                "Отбери 5-8 главных новостей, сожми повторы и объясни, что произошло и почему это имеет значение. "
+                "Используй только эти секции, если для них реально есть новости: Models, Products / Agents, Creative AI, Business / Money, Research, Policy / Society. "
+                "Не используй Scary / Weird Future как секцию ежедневного выпуска; странные AI-кейсы оставь для отдельной рубрики и упоминай здесь только если это важная новость в Policy / Society. "
+                "Сделай 3-5 секций максимум. В каждой секции 1-3 пункта. Каждый пункт 1-2 коротких предложения. "
+                "Headline должен быть ровно в формате: AI APOCALYPSE DAILY // утренняя сводка — " + today + ". "
+                "Intro сделай одной короткой строкой с настроением дня, без приветствий. "
+                "Closing короткий, без пафоса. Можно оставить пустым, если не нужен. "
+                "В humanity_status дай одну короткую сухую ироничную строку в стиле HUMANITY STATUS: про людей, работу, технологии, интернет, дизайн или будущее. "
+                "В поле bonus_post создай отдельный короткий пост, только если bonus_rubric не NONE. "
+                "Сегодня bonus_rubric: " + bonus_rubric + ". "
+                "Если bonus_rubric = NONE, верни bonus_post.enabled=false и пустые строки/массив в остальных полях bonus_post. "
+                "Если bonus_rubric = SIGNAL, сделай короткое наблюдение о том, что новости дня значат для культуры, дизайна, профессий, small business или интернета. Структура: что произошло, почему это важно, что может измениться, ироничный вывод. "
+                "Если bonus_rubric = DEAD INTERNET REPORT, сделай отдельный пост про странные проявления AI-интернета, синтетический контент, автоматизированные медиа, дипфейки или ощущение, что интернет всё меньше похож на человеческое место. "
+                "Если bonus_rubric = FUTURE JOBS / EXTINCT JOBS, сделай отдельный пост о том, какие задачи или профессии меняются из-за новостей дня: что исчезает, что остаётся человеческим, какие новые задачи появляются. "
+                "bonus_post должен быть коротким: 3-4 абзаца, без списка инструментов и без советов 'как пользоваться'. Если по новостям дня рубрику невозможно сделать честно, поставь enabled=false. "
+                "Не добавляй ссылки, не выдумывай факты, не используй слова 'революция' и 'изменит всё', если это явно не следует из новости."
             ),
-            "input": build_model_input(items),
+            "input": build_model_input(items, bonus_rubric),
             "text": {
                 "format": {
                     "type": "json_schema",
@@ -422,6 +507,10 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
         ).decode("utf-8")
     )
     parsed = json.loads(extract_response_text(response_payload))
+    return parsed
+
+
+def format_brief_message(parsed: dict) -> str:
 
     lines = [f"<b>{html.escape(parsed['headline'].strip())}</b>"]
     intro = re.sub(r"\s+", " ", parsed["intro"]).strip()
@@ -441,12 +530,12 @@ def generate_digest(items: list[NewsItem], config: Config) -> str:
     closing = re.sub(r"\s+", " ", parsed["closing"]).strip()
     if closing:
         lines.extend(["", html.escape(closing)])
-    ai_signoff = re.sub(r"\s+", " ", parsed["ai_signoff"]).strip()
-    if ai_signoff:
-        lines.extend(["", f"<b>P.S.</b> {html.escape(ai_signoff)}"])
+    humanity_status = re.sub(r"\s+", " ", parsed["humanity_status"]).strip()
+    if humanity_status:
+        humanity_status = re.sub(r"^HUMANITY STATUS:\s*", "", humanity_status, flags=re.IGNORECASE)
+        lines.extend(["", f"<b>HUMANITY STATUS:</b> {html.escape(humanity_status)}"])
 
-    message = "\n".join(lines).strip()
-    return message[:3900]
+    return "\n".join(lines).strip()[:3900]
 
 
 def send_telegram_message(config: Config, message: str) -> None:
@@ -475,17 +564,32 @@ def send_telegram_message(config: Config, message: str) -> None:
 
 def main() -> None:
     config = load_config()
-    scheduled_run = is_scheduled_run()
-    if scheduled_run and scheduled_digest_already_sent(config):
-        print("[info] Scheduled digest already sent today. Skipping.", file=sys.stderr)
+    mark_sent = should_send_once_per_day(config)
+    if config.mode not in {"brief", "rubric"}:
+        raise SystemExit("DIGEST_MODE must be either 'brief' or 'rubric'.")
+    if mark_sent and mode_already_sent_today(config):
+        print(f"[info] {config.mode} already sent today. Skipping.", file=sys.stderr)
         return
 
     items = collect_items(config)
-    message = generate_digest(items, config)
+    parsed = generate_message_payload(items, config)
+    if not parsed:
+        print("[info] No fresh items. Nothing to send.", file=sys.stderr)
+        if mark_sent:
+            save_state(config, items, mark_sent=True)
+        return
+
+    message = format_bonus_post(parsed) if config.mode == "rubric" else format_brief_message(parsed)
+    if not message:
+        print(f"[info] No {config.mode} message generated. Nothing to send.", file=sys.stderr)
+        if mark_sent:
+            save_state(config, items, mark_sent=True)
+        return
+
     send_telegram_message(config, message)
-    if items or scheduled_run:
-        save_state(config, items, mark_scheduled_sent=scheduled_run)
-    print(f"[info] Sent Telegram digest with {len(items)} source item(s).", file=sys.stderr)
+    if items or mark_sent:
+        save_state(config, items, mark_sent=mark_sent)
+    print(f"[info] Sent Telegram {config.mode} with {len(items)} source item(s).", file=sys.stderr)
 
 
 if __name__ == "__main__":
