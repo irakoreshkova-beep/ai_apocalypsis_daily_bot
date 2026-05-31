@@ -2,7 +2,9 @@
 
 Минимальный ежедневный AI-дайджест в Telegram:
 
-- `GitHub Actions` запускается каждый день в `09:00` по `Asia/Tbilisi`
+- `GitHub Actions` сейчас временно запускается каждые 5 минут для диагностики schedule
+- после проверки расписание нужно вернуть на ежедневный утренний запуск
+- скрипт защищен от дублей и отправляет не больше одного scheduled-дайджеста в день
 - [daily_digest.py](/Users/irakoreshkova/Documents/New project/ai-news-telegram/daily_digest.py:1) собирает AI-новости из RSS/newsroom-источников
 - OpenAI API делает короткий пересказ на русском
 - Telegram Bot API отправляет итог в ваш чат или канал
@@ -33,7 +35,7 @@ https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getUpdates
 
 ## Ручной тест
 
-1. Залейте [daily_digest.py](/Users/irakoreshkova/Documents/New project/ai-news-telegram/daily_digest.py:1) и [telegram-ai-digest.yml](/Users/irakoreshkova/Documents/New project/.github/workflows/telegram-ai-digest.yml:1) в репозиторий.
+1. Залейте [daily_digest.py](/Users/irakoreshkova/Documents/New project/ai-news-telegram/daily_digest.py:1), [digest_state.json](/Users/irakoreshkova/Documents/New project/ai-news-telegram/digest_state.json:1) и [telegram-ai-digest.yml](/Users/irakoreshkova/Documents/New project/.github/workflows/telegram-ai-digest.yml:1) в репозиторий.
 2. Добавьте secrets.
 3. Откройте `Actions` → `Telegram AI Digest` → `Run workflow`.
 4. Проверьте, пришло ли сообщение в Telegram.
