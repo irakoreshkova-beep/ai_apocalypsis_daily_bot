@@ -25,6 +25,7 @@ FEEDS = [
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 ROOT = Path(__file__).resolve().parent
+STATE_FILE = ROOT / "digest_state.json"
 
 
 @dataclass
@@ -36,6 +37,7 @@ class Config:
     timezone_name: str
     lookback_hours: int
     max_items: int
+    state_limit: int
 
 
 @dataclass
@@ -45,6 +47,13 @@ class NewsItem:
     link: str
     published_at: datetime
     snippet: str
+
+    @property
+    def fingerprint(self) -> str:
+        raw = f"{self.source}|{self.link}".encode("utf-8")
+        import hashlib
+
+        return hashlib.sha256(raw).hexdigest()
 
 
 def env_int(name: str, default: int) -> int:
@@ -65,7 +74,8 @@ def load_config() -> Config:
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         timezone_name=os.getenv("DIGEST_TIMEZONE", "Asia/Tbilisi"),
         lookback_hours=env_int("DIGEST_LOOKBACK_HOURS", 30),
-        max_items=env_int("DIGEST_MAX_ITEMS", 12),
+        max_items=env_int("DIGEST_MAX_ITEMS", 8),
+        state_limit=env_int("DIGEST_STATE_LIMIT", 800),
     )
 
 
@@ -239,6 +249,25 @@ def dedupe_items(items: list[NewsItem]) -> list[NewsItem]:
     return sorted(deduped.values(), key=lambda item: item.published_at, reverse=True)
 
 
+def load_state() -> dict:
+    if not STATE_FILE.exists():
+        return {"sent_fingerprints": []}
+    try:
+        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"sent_fingerprints": []}
+
+
+def save_state(config: Config, items: list[NewsItem]) -> None:
+    existing = load_state().get("sent_fingerprints", [])
+    merged = existing + [item.fingerprint for item in items]
+    payload = {
+        "sent_fingerprints": merged[-config.state_limit :],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    STATE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def collect_items(config: Config) -> list[NewsItem]:
     now_utc = datetime.now(timezone.utc)
     cutoff = now_utc - timedelta(hours=config.lookback_hours)
@@ -251,7 +280,8 @@ def collect_items(config: Config) -> list[NewsItem]:
             items.extend(fetch_anthropic_newsroom(feed["url"]))
 
     deduped = dedupe_items(items)
-    fresh = [item for item in deduped if item.published_at >= cutoff]
+    seen = set(load_state().get("sent_fingerprints", []))
+    fresh = [item for item in deduped if item.published_at >= cutoff and item.fingerprint not in seen]
     return fresh[: config.max_items]
 
 
@@ -427,6 +457,8 @@ def main() -> None:
     items = collect_items(config)
     message = generate_digest(items, config)
     send_telegram_message(config, message)
+    if items:
+        save_state(config, items)
     print(f"[info] Sent Telegram digest with {len(items)} source item(s).", file=sys.stderr)
 
 
