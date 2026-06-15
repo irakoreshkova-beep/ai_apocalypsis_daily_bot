@@ -288,7 +288,11 @@ def should_send_once_per_day(config: Config) -> bool:
 
 
 def state_date_key(config: Config) -> str:
-    return "last_rubric_date" if config.mode == "rubric" else "last_digest_date"
+    return {
+        "brief": "last_digest_date",
+        "analysis": "last_analysis_date",
+        "rubric": "last_rubric_date",
+    }[config.mode]
 
 
 def mode_already_sent_today(config: Config) -> bool:
@@ -325,7 +329,9 @@ def collect_items(config: Config) -> list[NewsItem]:
 
     deduped = dedupe_items(items)
     seen = set(load_state().get("sent_fingerprints", []))
-    fresh = [item for item in deduped if item.published_at >= cutoff and item.fingerprint not in seen]
+    recent = [item for item in deduped if item.published_at >= cutoff]
+    # The analysis intentionally revisits the strongest news from the morning brief.
+    fresh = recent if config.mode == "analysis" else [item for item in recent if item.fingerprint not in seen]
     return fresh[: config.max_items]
 
 
@@ -358,6 +364,7 @@ def bonus_rubric_for_today(config: Config) -> str:
 def build_model_input(items: list[NewsItem], bonus_rubric: str) -> str:
     payload = {
         "bonus_rubric": bonus_rubric,
+        "mode": os.getenv("DIGEST_MODE", "brief").lower(),
         "items": [
             {
                 "source": item.source,
@@ -411,6 +418,36 @@ def format_bonus_post(parsed: dict) -> str:
     return "\n".join(lines).strip()[:3900]
 
 
+def format_analysis_post(parsed: dict) -> str:
+    analysis = parsed.get("analysis_post", {})
+    if not analysis.get("enabled"):
+        return ""
+
+    title = re.sub(r"\s+", " ", analysis.get("title", "")).strip()
+    lead = re.sub(r"\s+", " ", analysis.get("lead", "")).strip()
+    if not title or not lead:
+        return ""
+
+    lines = [f"<b>РАЗБОР ДНЯ // {html.escape(title)}</b>", "", html.escape(lead)]
+    fields = [
+        ("Что произошло", "what_happened"),
+        ("Почему это важно сейчас", "why_it_matters"),
+        ("Кого это касается", "who_it_affects"),
+        ("Что дальше", "what_next"),
+        ("Без хайпа", "reality_check"),
+    ]
+    for label, key in fields:
+        text = re.sub(r"\s+", " ", analysis.get(key, "")).strip()
+        if text:
+            lines.extend(["", f"<b>{label}:</b> {html.escape(text)}"])
+
+    humanity_status = re.sub(r"\s+", " ", analysis.get("humanity_status", "")).strip()
+    if humanity_status:
+        humanity_status = re.sub(r"^HUMANITY STATUS:\s*", "", humanity_status, flags=re.IGNORECASE)
+        lines.extend(["", f"<b>HUMANITY STATUS:</b> {html.escape(humanity_status)}"])
+    return "\n".join(lines).strip()[:3900]
+
+
 def generate_message_payload(items: list[NewsItem], config: Config) -> dict | None:
     try:
         today = local_now(config).strftime("%d.%m.%Y")
@@ -433,8 +470,9 @@ def generate_message_payload(items: list[NewsItem], config: Config) -> dict | No
                     "properties": {
                         "title": {"type": "string"},
                         "items": {"type": "array", "items": {"type": "string"}},
+                        "takeaway": {"type": "string"},
                     },
-                    "required": ["title", "items"],
+                    "required": ["title", "items", "takeaway"],
                     "additionalProperties": False,
                 },
             },
@@ -452,8 +490,42 @@ def generate_message_payload(items: list[NewsItem], config: Config) -> dict | No
                 "required": ["enabled", "rubric", "title", "body", "humanity_status"],
                 "additionalProperties": False,
             },
+            "analysis_post": {
+                "type": "object",
+                "properties": {
+                    "enabled": {"type": "boolean"},
+                    "title": {"type": "string"},
+                    "lead": {"type": "string"},
+                    "what_happened": {"type": "string"},
+                    "why_it_matters": {"type": "string"},
+                    "who_it_affects": {"type": "string"},
+                    "what_next": {"type": "string"},
+                    "reality_check": {"type": "string"},
+                    "humanity_status": {"type": "string"},
+                },
+                "required": [
+                    "enabled",
+                    "title",
+                    "lead",
+                    "what_happened",
+                    "why_it_matters",
+                    "who_it_affects",
+                    "what_next",
+                    "reality_check",
+                    "humanity_status",
+                ],
+                "additionalProperties": False,
+            },
         },
-        "required": ["headline", "intro", "sections", "closing", "humanity_status", "bonus_post"],
+        "required": [
+            "headline",
+            "intro",
+            "sections",
+            "closing",
+            "humanity_status",
+            "bonus_post",
+            "analysis_post",
+        ],
         "additionalProperties": False,
     }
 
@@ -465,21 +537,32 @@ def generate_message_payload(items: list[NewsItem], config: Config) -> dict | No
                 "Тон: умный друг рассказывает AI-новости за кофе. Живо, понятно, с лёгкой иронией и чёрным юмором, но без клоунады. "
                 "Не звучать как пресс-релиз, корпоративный отчёт, лекция, аналитическая записка или техно-бро тред. "
                 "Пиши простыми словами и короткими фразами. Если предложение можно сделать короче, сделай короче. "
-                "На входе список свежих AI-новостей. Собери короткий DAILY AI BRIEFING на русском языке. "
+                "На входе список свежих AI-новостей и поле mode. mode может быть brief, analysis или rubric. "
                 "Не пиши от лица Ирины и не рассказывай про автоматизацию канала. Пиши как живой наблюдатель, которому не всё равно. "
-                "Отбери 4-6 главных новостей, сожми повторы и объясни, что произошло человеческим языком. "
+                "Если mode = brief, собери короткий DAILY AI BRIEFING на русском языке. "
+                "Отбери до 8 главных новостей, сожми повторы и объясни, что произошло человеческим языком. "
                 "Используй только эти секции, если для них реально есть новости: Models, Products / Agents, Creative AI, Business / Money, Research, Policy / Society. "
                 "Не используй Scary / Weird Future как секцию ежедневного выпуска; странные AI-кейсы оставь для отдельной рубрики и упоминай здесь только если это важная новость в Policy / Society. "
-                "Сделай 2-4 секции максимум. В каждой секции 1-2 пункта. Каждый пункт максимум 1 короткое предложение, без длинных объяснений. "
+                "Сделай 2-5 секций максимум. В каждой секции 1-3 пункта. Каждый пункт максимум 1 короткое предложение, без длинных объяснений. "
+                "Для каждой секции заполни takeaway: 1-2 коротких предложения с анализом, что меняется, на кого это влияет и чего ждать. Не повторяй новости из пунктов. "
                 "Headline должен быть ровно в формате: AI APOCALYPSE DAILY // утренняя сводка — " + today + ". "
                 "Intro сделай одной короткой дружелюбной строкой с настроением дня, без приветствий и пафоса. "
                 "Closing оставь пустым, если нет очень короткой смешной финальной фразы. "
-                "В humanity_status дай короткий панчлайн про людей, работу, технологии, интернет, дизайн или будущее. "
-                "humanity_status должен звучать как ироничная подпись друга, а не как отчёт. Максимум 120 символов. "
-                "Примеры нужного тона: 'человечество держится бодро: кофе, дедлайны и отрицание'; 'люди снова попросили машину объяснить, почему машины теперь всё объясняют'; 'дизайнеры живы, Figma просто проверяет давление'. "
+                "В humanity_status дай острый короткий панчлайн про людей, работу, технологии, интернет, дизайн или будущее. "
+                "Это должна быть настоящая шутка с неожиданным поворотом, а не милое наблюдение и не отчёт. Максимум 140 символов. "
+                "Допустим лёгкий чёрный юмор про AI-индустрию, карьеру, капитализм, контроль и человеческое отрицание. Не шути про реальные трагедии и конкретных уязвимых людей. "
+                "Примеры направления, не копируй их дословно: 'ИИ пока не отнял вашу работу. Он просто участвует в собеседовании на неё'; "
+                "'мы всё ещё принимаем решения сами. Просто после рекомендации алгоритма'; "
+                "'люди создали машину, чтобы экономить время, и теперь круглосуточно читают её обновления'. "
+                "Если mode не brief, верни пустые headline, intro, sections, closing и humanity_status. "
+                "Если mode = analysis, выбери одну самую важную новость дня и создай analysis_post. "
+                "analysis_post должен быть отдельным понятным разбором: что произошло; почему это важно именно сейчас; на кого повлияет; что может произойти дальше; где реальное изменение, а где маркетинговый шум. "
+                "Не пересказывай пресс-релиз и не раздувай значение новости. Пиши как умный друг, который прочитал всё и теперь объясняет главное. "
+                "Каждое поле analysis_post — один короткий абзац. Заголовок конкретный и цепкий. reality_check — честный вывод без хайпа. "
+                "Для analysis_post тоже создай новый острый humanity_status. Если mode не analysis, верни analysis_post.enabled=false и пустые строки во всех остальных полях analysis_post. "
                 "В поле bonus_post создай отдельный короткий пост, только если bonus_rubric не NONE. "
                 "Сегодня bonus_rubric: " + bonus_rubric + ". "
-                "Если bonus_rubric = NONE, верни bonus_post.enabled=false и пустые строки/массив в остальных полях bonus_post. "
+                "Если mode не rubric или bonus_rubric = NONE, верни bonus_post.enabled=false и пустые строки/массив в остальных полях bonus_post. "
                 "Если bonus_rubric = SIGNAL, сделай короткое наблюдение о том, что новости дня значат для культуры, дизайна, профессий, small business или интернета. Не объясняй как учебник, формулируй как один острый вывод. "
                 "Если bonus_rubric = DEAD INTERNET REPORT, сделай отдельный пост про странные проявления AI-интернета, синтетический контент, автоматизированные медиа, дипфейки или ощущение, что интернет всё меньше похож на человеческое место. "
                 "Если bonus_rubric = FUTURE JOBS / EXTINCT JOBS, сделай отдельный пост о том, какие задачи или профессии меняются из-за новостей дня: что исчезает, что остаётся человеческим, какие новые задачи появляются. "
@@ -532,6 +615,9 @@ def format_brief_message(parsed: dict) -> str:
             text = re.sub(r"\s+", " ", bullet).strip()
             if text:
                 lines.append(f"▪️ {html.escape(text)}")
+        takeaway = re.sub(r"\s+", " ", section.get("takeaway", "")).strip()
+        if takeaway:
+            lines.extend(["", f"<b>Что это меняет:</b> {html.escape(takeaway)}"])
     closing = re.sub(r"\s+", " ", parsed["closing"]).strip()
     if closing:
         lines.extend(["", html.escape(closing)])
@@ -570,8 +656,8 @@ def send_telegram_message(config: Config, message: str) -> None:
 def main() -> None:
     config = load_config()
     mark_sent = should_send_once_per_day(config)
-    if config.mode not in {"brief", "rubric"}:
-        raise SystemExit("DIGEST_MODE must be either 'brief' or 'rubric'.")
+    if config.mode not in {"brief", "analysis", "rubric"}:
+        raise SystemExit("DIGEST_MODE must be 'brief', 'analysis', or 'rubric'.")
     if mark_sent and mode_already_sent_today(config):
         print(f"[info] {config.mode} already sent today. Skipping.", file=sys.stderr)
         return
@@ -580,15 +666,16 @@ def main() -> None:
     parsed = generate_message_payload(items, config)
     if not parsed:
         print("[info] No fresh items. Nothing to send.", file=sys.stderr)
-        if mark_sent:
-            save_state(config, items, mark_sent=True)
         return
 
-    message = format_bonus_post(parsed) if config.mode == "rubric" else format_brief_message(parsed)
+    formatters = {
+        "brief": format_brief_message,
+        "analysis": format_analysis_post,
+        "rubric": format_bonus_post,
+    }
+    message = formatters[config.mode](parsed)
     if not message:
         print(f"[info] No {config.mode} message generated. Nothing to send.", file=sys.stderr)
-        if mark_sent:
-            save_state(config, items, mark_sent=True)
         return
 
     send_telegram_message(config, message)
