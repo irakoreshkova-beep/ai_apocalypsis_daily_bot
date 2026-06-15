@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "What to send: brief or rubric"
+        description: "What to send: brief, analysis, or rubric"
         required: false
         default: "brief"
+      force:
+        description: "Send even if this mode already ran today"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -31,6 +35,7 @@ jobs:
           OPENAI_MODEL: "gpt-4.1-mini"
           DIGEST_TRIGGER: "cronjob"
           DIGEST_MODE: ${{ github.event.inputs.mode || 'brief' }}
+          DIGEST_FORCE_SEND: ${{ github.event.inputs.force || 'false' }}
           DIGEST_TIMEZONE: "Asia/Tbilisi"
           DIGEST_LOOKBACK_HOURS: "30"
           DIGEST_MAX_ITEMS: "8"
