@@ -189,12 +189,13 @@
     "eac34487f510d38a70474aba2e109ab2dba25f50ec7eb95d3ccd548745fcce79",
     "62dd21bd6cd919c60135de5377f11001daf7152b15a259de03b7606bb4cba572",
     "baa82e89d81a5caa510695f7cacdc7c19932eaede5780f08377d2015a266fcb1",
-    "55cac510d33a4c71714b56c6627e8b08e163d3a18f39adbcedf08142570ed8e2"
+    "55cac510d33a4c71714b56c6627e8b08e163d3a18f39adbcedf08142570ed8e2",
+    "5701b75e7df443cf627a7047737466adce0a3767fdaf523feaf41742be8a3f5c"
   ],
-  "updated_at": "2026-07-12T08:01:35.954311+00:00",
+  "updated_at": "2026-07-12T12:01:46.885030+00:00",
   "last_scheduled_digest_date": "2026-07-11",
   "last_digest_date": "2026-07-11",
-  "last_rubric_date": "2026-07-09",
+  "last_rubric_date": "2026-07-12",
   "last_analysis_date": "2026-07-12",
   "recent_punchlines": [
     "Claude тихо подкрадывается и перехватывает платящих, пока ChatGPT думает о выгоде — кто кого переиграет в игре добрых ассистентов?",
