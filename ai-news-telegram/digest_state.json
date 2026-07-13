@@ -190,12 +190,16 @@
     "62dd21bd6cd919c60135de5377f11001daf7152b15a259de03b7606bb4cba572",
     "baa82e89d81a5caa510695f7cacdc7c19932eaede5780f08377d2015a266fcb1",
     "55cac510d33a4c71714b56c6627e8b08e163d3a18f39adbcedf08142570ed8e2",
-    "5701b75e7df443cf627a7047737466adce0a3767fdaf523feaf41742be8a3f5c"
+    "5701b75e7df443cf627a7047737466adce0a3767fdaf523feaf41742be8a3f5c",
+    "4a77cbd8ebe2500ad0d7830e9a1e2288c7ea49a359fcb6c97803c34fd3fb3454",
+    "6bb9c6ecc25a90546b0d58a40a51072b698a6e6baed5ee5ee18b8a4863f64b6a",
+    "c6c874d8136d392d5c56876b6b6f8820c7274fe1ac142ca3799700ba2a31862a",
+    "dd871bde39b01624598ce2ed035da7c05bf02efc4944f1619e44e3fc00c56f54"
   ],
-  "updated_at": "2026-07-13T08:01:35.840311+00:00",
+  "updated_at": "2026-07-13T12:01:41.665735+00:00",
   "last_scheduled_digest_date": "2026-07-13",
   "last_digest_date": "2026-07-13",
-  "last_rubric_date": "2026-07-12",
+  "last_rubric_date": "2026-07-13",
   "last_analysis_date": "2026-07-13",
   "recent_punchlines": [
     "Claude тихо подкрадывается и перехватывает платящих, пока ChatGPT думает о выгоде — кто кого переиграет в игре добрых ассистентов?",
