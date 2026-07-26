@@ -276,12 +276,15 @@
     "7c38f151feedaea132fdd3401fc66ae1bce6b32bac94cb4fc892b20a59a12234",
     "a5c827a4bf2949fe3c9541548a71f3db3e170ec1da4a1cc4ea53d383a64eb728",
     "dd895782de38a5378f12e8adcb543a4414e011fd64a8b0e77da86ff868622662",
-    "643b9701bc8eafa38f577d72bede2b21bf4f39e13c2fee5fd9766dc3a95a7d44"
+    "643b9701bc8eafa38f577d72bede2b21bf4f39e13c2fee5fd9766dc3a95a7d44",
+    "a82617dda1239a3f582e79cb543fac26857024d351553e1cff8e1e29a4156783",
+    "3b4b7bc1a01f5f973d2022242e6048957e7c4f8d4df03b323b8c461d989a4d89",
+    "aadb83bc27407279f42862a37faca1c9ae8aed27aedce32800df06f6cc0a8dba"
   ],
-  "updated_at": "2026-07-26T08:00:47.270398+00:00",
+  "updated_at": "2026-07-26T12:00:46.156095+00:00",
   "last_scheduled_digest_date": "2026-07-26",
   "last_digest_date": "2026-07-26",
-  "last_rubric_date": "2026-07-25",
+  "last_rubric_date": "2026-07-26",
   "last_analysis_date": "2026-07-26",
   "recent_punchlines": [
     "Claude тихо подкрадывается и перехватывает платящих, пока ChatGPT думает о выгоде — кто кого переиграет в игре добрых ассистентов?",
