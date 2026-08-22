@@ -463,12 +463,19 @@
     "2c53241fb44067240775f5c8cf6e9b301934c984d37d89c69b784c6b025d61d5",
     "6019bf0fc2fdd234ed9b725d84a447b478c292ee5026f14f5001b13e1b47727b",
     "a85a940abb1f4046a99a65c4e06051ec631b1d079db0926572394209b8645217",
-    "98dd9bfc498579766f4ec3ca1809357fb2f0c99b055bdca6258e4a90c34db62a"
+    "98dd9bfc498579766f4ec3ca1809357fb2f0c99b055bdca6258e4a90c34db62a",
+    "cd36749e9a39cceff78daced3a40de78ff4a92a19d00036e10389b7401775fe0",
+    "01fcec4aa69d5f022c12c26c815ddf0b6dc749672604b11c4cba2f18d259b59e",
+    "720d9e56e71c8977717de743e61cbb24051d5ed3c6ad27eebe165a84b546db54",
+    "15a93aec5366287f85c940963e928a4603d05832bba848720f63f0a4da9f94c9",
+    "7cc3af7535752c820c28fac64a5f549df0a3712c789aca4c5f9e2df009afaf45",
+    "2923b0f78460b63ac9b1fcb21776a363dd360c7b560a1ab75622fb09e1063e89",
+    "9436daab450f39761a22a97e0de9b1536dba535e414d044424356b798732db9b"
   ],
-  "updated_at": "2026-08-22T08:00:49.687180+00:00",
+  "updated_at": "2026-08-22T12:00:42.998438+00:00",
   "last_scheduled_digest_date": "2026-08-22",
   "last_digest_date": "2026-08-22",
-  "last_rubric_date": "2026-08-21",
+  "last_rubric_date": "2026-08-22",
   "last_analysis_date": "2026-08-22",
   "recent_punchlines": [
     "Anthropic делает Claude вдвое дешевле для Калифорнии — AI теперь почти как соцпакет госслужащего.",
