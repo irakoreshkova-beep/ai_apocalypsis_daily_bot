@@ -470,12 +470,16 @@
     "15a93aec5366287f85c940963e928a4603d05832bba848720f63f0a4da9f94c9",
     "7cc3af7535752c820c28fac64a5f549df0a3712c789aca4c5f9e2df009afaf45",
     "2923b0f78460b63ac9b1fcb21776a363dd360c7b560a1ab75622fb09e1063e89",
-    "9436daab450f39761a22a97e0de9b1536dba535e414d044424356b798732db9b"
+    "9436daab450f39761a22a97e0de9b1536dba535e414d044424356b798732db9b",
+    "f9496ec81bfc306716a2125bb12d723438c5a57248763ff6058f007aeb0df0e4",
+    "f8a79616c515096d402aad775ca88799cc7fd214e89420b5a4c860ee19f636d8",
+    "f4cad9274ea6e2b6f0da5819e6e9058566c3588f0613d54e41b4156ebae8a12a",
+    "24cdf0186c9d264bd8534e485dbea6973b0433bd20a241540897ff4e9d49ad14"
   ],
-  "updated_at": "2026-08-23T08:00:50.138904+00:00",
+  "updated_at": "2026-08-23T12:00:37.796590+00:00",
   "last_scheduled_digest_date": "2026-08-23",
   "last_digest_date": "2026-08-23",
-  "last_rubric_date": "2026-08-22",
+  "last_rubric_date": "2026-08-23",
   "last_analysis_date": "2026-08-23",
   "recent_punchlines": [
     "Claude Fable 5 наконец вернулся — Anthropic смогли договориться даже с Трампом, и это уже повод насторожиться.",
