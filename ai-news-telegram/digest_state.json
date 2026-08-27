@@ -494,12 +494,20 @@
     "a2e244adebb2865fa7282eeaa7f57729fc85702aaad504cbeef915aba72ef415",
     "4ccbacfe616251178b2daa8cf536b2c810a4d8f885f0a7ee3ccef96c8a614619",
     "b6abb612cffd6d244a41e4fb418d791ebf16938676960c4212f10ab984fe7c84",
-    "bd3d632d19601b68ad94adda6be4964c1c86bd57be62d77834b96f3318d63036"
+    "bd3d632d19601b68ad94adda6be4964c1c86bd57be62d77834b96f3318d63036",
+    "5327927ff94fb953a07d467b3c9bd80d8879b7b00305cc55a4335c9c92acb583",
+    "268adcca43b1d9a49dc197ad602260b350e4d83da01c0882a4abb21c58ede7f1",
+    "42cd86062dc34d9758c49b048bb8c65af2110e83985aef5e554e63609cfd9829",
+    "8aaf6466139d29490344ea94f40f4d255c800b0f112a2f69a0cba8ce3b35c377",
+    "506c52b67bafcd62c608264ac6060804061c3f80d3ab73f7a14d479e55e612ca",
+    "7def7d1262c95d5c9d370ac9c64cb8dc2e434e570ea638b89723ba1d5f7829f6",
+    "1ab7b23c965c751a615162a8f58a17fb7981f658a5634c84a8b8cd6690211f68",
+    "3b7313d89c176de1f94409c61e45d579919b98b8fee94b208f2ab085d430c52c"
   ],
-  "updated_at": "2026-08-27T08:00:55.783969+00:00",
+  "updated_at": "2026-08-27T12:00:53.779500+00:00",
   "last_scheduled_digest_date": "2026-08-27",
   "last_digest_date": "2026-08-27",
-  "last_rubric_date": "2026-08-26",
+  "last_rubric_date": "2026-08-27",
   "last_analysis_date": "2026-08-27",
   "recent_punchlines": [
     "Alibaba запретила Claude Code — теперь AI может запретить тебя, а не ты его.",
